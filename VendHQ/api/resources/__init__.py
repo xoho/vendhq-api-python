@@ -6,7 +6,7 @@ from VendHQ.api.lib.connection import EmptyResponseWarning
 from datetime import datetime
 from pprint import pformat
 log = logging.getLogger("VendHQ.Resource")
-log.setLevel(logging.DEBUG)
+
 
 class ResourceAccessor(object):
     """
@@ -116,10 +116,16 @@ class ResourceAccessor(object):
 
 
     def get(self, id):
-        url = "%s/%s.xml" % (self._url, id)
+        url = "%s/%s" % (self._url, id)
         try:
             result = self._connection.get(url)
-            return self._klass(self._connection, self._url, result, self._parent)
+            data = {}
+            for key in result.keys():
+                log.debug("Looking for item in %s" % key)
+                data = result[key][0]
+                print data
+                break
+            return self._klass(self._connection, self._url, data, self._parent)
         except:
             return None
 

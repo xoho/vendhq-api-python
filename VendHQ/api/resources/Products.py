@@ -7,11 +7,7 @@ class Products(ResourceObject):
 
     @classmethod
     def filter_set(cls):
-        fs = FilterSet(before = DateFilter(),
-            after = DateFilter(),
-            to = DateFilter(),
-        )
-        fs["from"] = DateFilter()
+        fs = FilterSet(since = DateFilter())
         return fs
 
     def getInventory(self, outlet_name):

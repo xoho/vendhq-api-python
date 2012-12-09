@@ -1,13 +1,10 @@
 
 
-STORE_HOST = "store.vendhq.com"
-STORE_USERNAME = "username"
-STORE_PWD = "password"
+STORE_HOST = "nahnay.vendhq.com"
+STORE_USERNAME = "***"
+STORE_PWD = "****"
 
-try:
-    from settings import *
-except:
-    pass
+from pprint import pprint
 import sys, os
 
 sys.path.append(os.path.abspath('..'))
@@ -34,15 +31,25 @@ if __name__ == "__main__":
     #createProducts(api, 125)
 
     # Get  products starting at a product page
+    """
     for product in api.Products.enumerate(start=0, limit=3):
-        print "Product: %s on hand: %s" % (product.id, product.getInventory('Main Outlet'))
-
+        print "Product: %s %s on hand: %s" % (product.id, product.name, product.getInventory('Main Outlet'))
+    """
+    print api.Products.get_count()
     # Get products changed in the last hour
-    q = {'since':datetime.now()-timedelta(hours=-1)}
+    q = {'since':datetime.utcnow()-timedelta(days=2)}
+    print q["since"]
     print 'products changed in the last hour:'
     for product in api.Products.enumerate(query=q):
-        print "Product: %s on hand: %s" % (product.id, product.getInventory('Main Outlet'))
-
+        print "Product: %s %s on hand: %s" % (product.id, product.sku, product.getInventory('Main Outlet'))
+        for inv in product.inventory:
+            print "\t", inv["outlet_name"], inv["count"]
+    
+    p = api.Products.get("14338471-3ed3-11e2-b1f5-4040782fde00")
+    print p.name
+    for sales in api.Register_Sales.enumerate(query=q):
+        for prod in sales.register_sale_products:
+            print prod.id
 
     # Get Register sales
     #for sale in api.Register_Sales.enumerate():

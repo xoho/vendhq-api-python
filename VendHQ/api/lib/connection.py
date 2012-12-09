@@ -17,7 +17,7 @@ from httplib import HTTPSConnection, HTTPException
 #from xml.sax import SAXParseException
  
 log = logging.getLogger("VendHQ.com")
-log.setLevel(logging.DEBUG)
+
 
 class EmptyResponseWarning(HTTPException):
     pass
@@ -71,6 +71,7 @@ class Connection():
         request = self.__connection.request("GET", url, None, self.__headers)
         response = self.__connection.getresponse()
         data = response.read()
+        
         self.__connection.close()
         
         log.debug("GET %s status %d" % (url,response.status))
@@ -82,6 +83,7 @@ class Connection():
         
         # Check the return status
         if response.status == 200:
+            
             return simplejson.loads(data)
             
         elif response.status == 204:
