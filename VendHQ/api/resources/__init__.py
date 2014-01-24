@@ -43,21 +43,30 @@ class ResourceAccessor(object):
         # VendHQ uses pretty urls for query
         query_url = []
         log.debug('query %s' % query)
+        """
         for k,v in query.items():
             query_url.append(k)
             if isinstance(v,type(datetime.now())):
                 query_url.append(v.strftime('%Y-%m-%d %H:%M:%S'))
             else:
                 query_url.append(str(v))
-
-        url = '%s/%s' % (self._url, '/'.join(query_url) if query_url else '')
+        """
+        q_dict = {}
+        # cast the types
+        for k,v in query.items():
+            if isinstance(v,datetime):
+                q_dict[k] = v.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                q_dict[k] = str(v)
+                
+        #url = '%s%s' % (self._url, ''.join(query_url) if query_url else '')
 
         _query = {"page": page, "per_page": limit}
-        _query.update(query)
-        log.debug('url: %s' % url)
+        _query.update(q_dict)
+        log.debug('url: %s' % self._url)
         log.debug( 'query: %s' % _query)
 
-        data = self._connection.get("%s" % url, _query)
+        data = self._connection.get("%s" % self._url, _query)
         return data
     
     
@@ -123,7 +132,6 @@ class ResourceAccessor(object):
             for key in result.keys():
                 log.debug("Looking for item in %s" % key)
                 data = result[key][0]
-                print data
                 break
             return self._klass(self._connection, self._url, data, self._parent)
         except:
