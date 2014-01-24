@@ -65,8 +65,6 @@ class Connection():
             qs = "?%s" % qs
             
         url = "%s%s%s" % (self.base_url, url, qs)
-        log.debug("GET %s" % (url))
-        log.debug("Headers: %s" % pformat(self.__headers))
         self.__connection.connect()
         request = self.__connection.request("GET", url, None, self.__headers)
         response = self.__connection.getresponse()
@@ -74,16 +72,14 @@ class Connection():
         
         self.__connection.close()
         
-        log.debug("GET %s status %d" % (url,response.status))
+        log.debug("GET %s status %d %s" % (url,response.status, response.reason))
         log.debug('Response headers:')
         log.debug(pformat(response.getheaders()))
-        log.debug('Response reason: %s' % response.reason)
-        log.debug('Response msg: %s' % response.msg)
         result = {}
         
         # Check the return status
         if response.status == 200:
-            
+            log.debug("OUTPUT: %s" % data)
             return simplejson.loads(data)
             
         elif response.status == 204:
@@ -94,6 +90,11 @@ class Connection():
             raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
         
         elif response.status >= 400:
+            _result = simplejson.loads(data)
+            log.debug("OUTPUT %s" % _result)
+            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+        
+        elif response.status >= 300:
             _result = simplejson.loads(data)
             log.debug("OUTPUT %s" % _result)
             raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
