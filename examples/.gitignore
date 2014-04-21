@@ -1,3 +1,4 @@
 /settings.py
 *.csv
 makeproducts.py
+*.json

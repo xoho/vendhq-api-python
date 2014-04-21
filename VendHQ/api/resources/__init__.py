@@ -97,7 +97,7 @@ class ResourceAccessor(object):
             
             try:
                 data = self.__get_page(current_page, max_per_page, query)
-                if data.has_key(self.__resource_name.lower()):
+                if self.__resource_name.lower() in data.keys():
                     if len(data[self.__resource_name.lower()])==0:
                         # No more data is returned
                         break
@@ -116,6 +116,7 @@ class ResourceAccessor(object):
 
                     if page_index < max_per_page:
                         requested_items = 0
+                break
             # If the response was empty - we are done
             except EmptyResponseWarning:
                 requested_items = 0
@@ -144,14 +145,20 @@ class ResourceAccessor(object):
         except:
             return None
     
-    def inquire(self, what, query={}):
+    def inquire(self, what=None, query={}):
         _query = {}
         if query:
             _query = query.query_dict()
-        _query["q"] = what
+        #_query["q"] = what
         
-        result = self._connection.get("%s.xml" % (self._url), _query)
-        return result.get(what)
+        result = self._connection.get(self._url, _query)
+        
+        resource_name = self.__resource_name.lower()
+
+        if result and isinstance(result, dict) and resource_name in result.keys():
+            return result[resource_name]
+
+        return None
     
         
     def get_count(self, query={}):
@@ -210,7 +217,7 @@ class ResourceObject(object):
         
         self._parent = parent
         self._connection = connection
-        self._url = "%s/%s" % (url, self.id)
+        self._url = "%s/%s" % (url, self.id) if self.id else url
         self._cast_list()
         
     def _cast_list(self):
@@ -281,6 +288,7 @@ class ResourceObject(object):
         All sets on field properties are caches in the updates dictionary
         until saved
         """
+        log.debug('setattr %s %s' % (name, value))
         if name == "_fields":
             object.__setattr__(self, name, value)
         
@@ -307,6 +315,7 @@ class ResourceObject(object):
         Save any updates and set the fields to the values received 
         from the return value and clear the updates dictionary
         """
+        log.debug("saving...")
         if self._updates:
             log.info("Updating %s" % self.get_url())
             log.debug("Data: %s" % self._updates)

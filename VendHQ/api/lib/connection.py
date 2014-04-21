@@ -6,16 +6,11 @@ Handles put and get operations to the a REST API
 import sys
 import urllib
 import logging
-import simplejson
+import json
 from pprint import pformat
-#from urlparse import urlparse
-#from pprint import pprint, pformat
-from httplib import HTTPSConnection, HTTPException
+import requests
+from httplib import HTTPException
 
-#from xml.sax import parse, parseString
-#from xml.sax.handler import ContentHandler
-#from xml.sax import SAXParseException
- 
 log = logging.getLogger("VendHQ.com")
 
 
@@ -34,17 +29,20 @@ class Connection():
         On creation, an initial call is made to load the mappings of resources to URLS
         """
         self.host = host
-        self.base_url = base_url
+        self.base_url = "%s/%s" % (host,base_url)
+        if not self.base_url.startswith('http://') or not self.base_url.startswith('https://'):
+            self.base_url = "https://%s" % self.base_url
+
         self.auth = auth
         
-        log.info("API Host: %s/%s" % (self.host, self.base_url))
+        log.info("API Host: %s" % (self.base_url))
         log.debug("Accepting json, auth: Basic %s" % self.auth)
         self.__headers = {"Authorization": "Basic %s" % self.auth,
                         "Accept": "*/*",
                         "Content-Type": "application/json"}
         
         self.__resource_meta = {}
-        self.__connection = HTTPSConnection(self.host)
+        #self.__connection = HTTPSConnection(self.host)
         
         
         
@@ -65,39 +63,46 @@ class Connection():
             qs = "?%s" % qs
             
         url = "%s%s%s" % (self.base_url, url, qs)
-        self.__connection.connect()
-        request = self.__connection.request("GET", url, None, self.__headers)
-        response = self.__connection.getresponse()
-        data = response.read()
+        print url
         
-        self.__connection.close()
+        response = requests.get(url, data=None, headers=self.__headers)
         
-        log.debug("GET %s status %d %s" % (url,response.status, response.reason))
+        try:data = response.json()
+        except Exception, e:
+            raise HTTPException("Could not decode json data from response %s" % response.text)
+
+        status_code = response.status_code
+        
+        log.debug("GET %s status %d" % (url,status_code))
         log.debug('Response headers:')
-        log.debug(pformat(response.getheaders()))
+        log.debug(pformat(response.headers))
+        
         result = {}
         
         # Check the return status
-        if response.status == 200:
+        status_code = response.status_code
+        if status_code == 200:
+            result = data
             log.debug("OUTPUT: %s" % data)
-            return simplejson.loads(data)
             
-        elif response.status == 204:
-            raise EmptyResponseWarning("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+        elif status_code == 204:
+            raise EmptyResponseWarning("%d @ https://%s%s" % (status_code, self.host, url))
         
-        elif response.status == 404:
+        elif status_code == 404:
             log.debug("%s returned 404 status" % url)
-            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
         
-        elif response.status >= 400:
-            _result = simplejson.loads(data)
+        elif status_code >= 400:
+            try:_result = data
+            except: _result = response.text
             log.debug("OUTPUT %s" % _result)
-            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
         
-        elif response.status >= 300:
-            _result = simplejson.loads(data)
+        elif status_code >= 300:
+            try:_result = data
+            except: _result = response.text
             log.debug("OUTPUT %s" % _result)
-            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
         
         return result
     
@@ -121,34 +126,43 @@ class Connection():
         """
         url = "%s%s" % (self.base_url, url)
         log.debug("PUT %s" % (url))
-        self.__connection.connect()
+        
         
         put_headers = {"Content-Type": "application/json"}
         put_headers.update(self.__headers)
-        request = self.__connection.request("PUT", url, simplejson.dumps(updates), put_headers)
-        response = self.__connection.getresponse()
-        data = response.read()
-        self.__connection.close()
+        response = requests.post(url, data=json.dumps(updates), headers=put_headers)
+        try:data = response.json()
+        except Exception, e:
+            raise HTTPException("Could not decode json data from response %s" % response.text)
+
         
-        log.debug("PUT %s status %d" % (url,response.status))
+        status_code = response.status_code
+        
+        log.debug("PUT %s status %d" % (url,status_code))
         log.debug("OUTPUT: %s" % data)
         
         result = {}
-        if response.status == 200:
-            result = simplejson.loads(data)
+        if status_code == 200:
+            result = data
         
-        elif response.status == 204:
-            raise EmptyResponseWarning("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+        elif status_code == 204:
+            raise EmptyResponseWarning("%d @ https://%s%s" % (status_code, self.host, url))
         
-        elif response.status == 404:
+        elif status_code == 404:
             log.debug("%s returned 404 status" % url)
-            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
         
-        elif response.status >= 400:
-            _result = simplejson.loads(data)
+        elif status_code >= 400:
+            try:_result = data
+            except: _result = response.text
             log.debug("OUTPUT %s" % _result)
-            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
         
+        elif status_code >= 300:
+            try:_result = data
+            except: _result = response.text
+            log.debug("OUTPUT %s" % _result)
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))        
         return result
 
     def create(self, url, data):
@@ -158,34 +172,44 @@ class Connection():
 
         url = "%s%s" % (self.base_url, url)
         log.debug("POST %s" % (url))
-        self.__connection.connect()
+        
 
         post_headers = {"Content-Type": "application/json"}
         post_headers.update(self.__headers)
-        request = self.__connection.request("POST", url, simplejson.dumps(data), post_headers)
-        response = self.__connection.getresponse()
-        data = response.read()
-        self.__connection.close()
 
-        log.debug("POST %s status %d" % (url,response.status))
+        response = requests.post(url, data=json.dumps(data), headers=post_headers)
+        try:data = response.json()
+        except Exception, e:
+            raise HTTPException("Could not decode json data from response %s" % response.text)
+        
+        status_code = response.status_code
+
+        log.debug("POST %s status %d" % (url,status_code))
         log.debug("OUTPUT: %s" % data)
 
         result = {}
-        if response.status == 200:
-            result = simplejson.loads(data)
+        if status_code == 200:
+            result = data
 
-        elif response.status == 204:
-            raise EmptyResponseWarning("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+        elif status_code == 204:
+            raise EmptyResponseWarning("%d @ https://%s%s" % (status_code, self.host, url))
 
-        elif response.status == 404:
+        elif status_code == 404:
             log.debug("%s returned 404 status" % url)
-            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
 
-        elif response.status >= 400:
-            _result = simplejson.loads(data)
+        elif status_code >= 400:
+            try:_result = data
+            except: _result = response.text
             log.debug("OUTPUT %s" % _result)
-            raise HTTPException("%d %s @ https://%s%s" % (response.status, response.reason, self.host, url))
-
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
+        
+        elif status_code >= 300:
+            try:_result = data
+            except: _result = response.text
+            log.debug("OUTPUT %s" % _result)
+            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))        
+        
         return result
 
     def __repr__(self):
