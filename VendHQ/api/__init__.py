@@ -282,7 +282,7 @@ class ApiClient(object):
                 "base_price": shipping_cost,
                 "quantity":1,
                 "tax": 0,
-                "total_tax": 0
+                "tax_total": 0
                 }
             try:order['entries'].append(entry)
             except: pass
@@ -294,7 +294,7 @@ class ApiClient(object):
                 "base_price": -float(order['store_credit_amount']),
                 "quantity":1,
                 "tax": 0,
-                "total_tax":0        
+                "tax_total":0        
             }
             order['entries'].append(entry)
 
@@ -306,7 +306,7 @@ class ApiClient(object):
             "quantity": "quantity",
             "price": 'base_price',
             "tax": 'tax',
-            "tax_total" : "total_tax"
+            "total_tax" : "tax_total"
         }
 
         line_item_discount = 0.0
