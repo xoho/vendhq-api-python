@@ -78,6 +78,7 @@ class Connection():
         log.debug(pformat(response.headers))
         
         result = {}
+        reason = response.reason
         
         # Check the return status
         status_code = response.status_code
@@ -86,23 +87,23 @@ class Connection():
             log.debug("OUTPUT: %s" % data)
             
         elif status_code == 204:
-            raise EmptyResponseWarning("%d @ https://%s%s" % (status_code, self.host, url))
+            raise EmptyResponseWarning("%d @ https://%s%s" % (status_code, url, reason))
         
         elif status_code == 404:
             log.debug("%s returned 404 status" % url)
-            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
+            raise HTTPException("%d @ %s - %s" % (status_code, url, reason))
         
         elif status_code >= 400:
             try:_result = data
             except: _result = response.text
             log.debug("OUTPUT %s" % _result)
-            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
+            raise HTTPException("%d @ %s - %s" % (status_code, url, reason))
         
         elif status_code >= 300:
             try:_result = data
             except: _result = response.text
             log.debug("OUTPUT %s" % _result)
-            raise HTTPException("%d @ https://%s%s" % (status_code, self.host, url))
+            
         
         return result
     
