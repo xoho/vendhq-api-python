@@ -255,7 +255,7 @@ class ApiClient(object):
 
         # Get mapped items
         order_map = {
-            "sale_date": "date_modified",
+            "sale_date": "updated",
             "total_price": "total",
             "total_tax": "total_tax",
             "invoice_number": 'cartid',
@@ -271,14 +271,18 @@ class ApiClient(object):
         o['register_sale_products'] = []
 
         # Update shipping costs if any as a new entry
-        if order['shipping_address']['base_cost']>0:
+        
+        try: shipping_cost = float(order['base_shipping_cost'])
+        except: shipping_cost = 0
+
+        if shipping_cost>0:
             entry = {
                 'sku':'SHIPPING', 
                 'name':"Shipping", 
-                "base_price":order['shipping_address']['base_cost'],
+                "base_price": shipping_cost,
                 "quantity":1,
-                "tax": order['shipping_address']['cost_tax'],
-                "total_tax":order['shipping_address']['cost_tax']
+                "tax": 0,
+                "total_tax": 0
                 }
             try:order['entries'].append(entry)
             except: pass
@@ -302,11 +306,19 @@ class ApiClient(object):
             "quantity": "quantity",
             "price": 'base_price',
             "tax": 'tax',
-            "tax_total": "total_tax"
+            "tax_total" : "total_tax"
         }
 
         line_item_discount = 0.0
         for entry in order['entries']:  
+
+            if not 'sku' in entry.keys():
+                if 'id' in entry.keys():
+                    notes.append("Could not find sku for order entry %s" % entry['id'])
+                else:
+                    notes.append("Could not find details for order entry %s" % entry)
+                continue
+
             register_sale_product = {}
             for k,v in entry_map.items():
                 register_sale_product[k] = entry[v]
