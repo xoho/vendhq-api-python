@@ -2,6 +2,7 @@ import os
 import sys
 import base64
 import logging
+from datetime import datetime
 
 from VendHQ.api.lib.connection import Connection
 from resources import ResourceAccessor
@@ -16,6 +17,11 @@ class ApiClient(object):
         auth = base64.b64encode("%s:%s" % (username,pwd))
         self._connection = Connection(host, self.BASE_URL, auth)
         
+
+        self.__taxes = []
+        for t in self.Taxes.enumerate():
+            self.__taxes.append(t)
+
         
     def connection(self):
         pass
@@ -136,12 +142,15 @@ class ApiClient(object):
         return customer
 
     def get_tax(self, tax_rate):
+
         tax = None
-        for t in self.Taxes.enumerate():
+        for t in self.__taxes:
             if not tax: tax = t
-            if tax_rate==tax.rate:
+            # find closest match
+            if abs(tax_rate-t.rate)<0.002:
                 tax=t
                 break
+
         return tax
 
 
@@ -239,6 +248,10 @@ class ApiClient(object):
         register_id = self.get_register_id(register_name)
         customer = self.get_or_create_customer(order['billing_address'])
 
+        for k in ['total_ex_tax','total_tax','id','date_modified', 'total_inc_tax', 'products']:
+            if not k in order.keys():
+                raise Exception("Invalid order data: could not find '%s' in order fields [%s]" % (k, ",".join(order.keys())))
+
         loyality_x = max(loyality_x,0)
 
         o = {}
@@ -248,24 +261,28 @@ class ApiClient(object):
         o['customer_id'] = customer['id']
         o['user_name']  = username
         o['status'] = sale_status if sale_status in ['SAVED','CLOSED','OPEN'] else "SAVED"
-        total = float(order['total'])
+        total = float(order['total_ex_tax'])
         tax = float(order['total_tax'])
-        taxobj = self.get_tax(tax/total if total>0 else 0)
+        tax_pc = 0 if total==0 else tax/total
+
+        o['tax_pc'] = tax_pc
+        taxobj = self.get_tax(tax_pc)
         o['tax_name'] = taxobj.name
 
         # Get mapped items
         order_map = {
-            "sale_date": "updated",
-            "total_price": "total",
-            "total_tax": "total_tax",
-            "invoice_number": 'cartid',
-            "invoice_sequence": 'cartid',
-            "note": 'customer_message',
+            "sale_date": {"field": "date_modified", "type":"datetime", "default":datetime.utcnow()},
+            "total_price": {"field": "total_ex_tax", "type":"float", "default":0.0}, # total excluding tax
+            "total_tax": {"field": "total_tax", "type":"float", "default":0.0},
+            "invoice_number": {"field": "id", "type":"int", "default":0},
+            "invoice_sequence": {"field": "id", "type":"int", "default":0},
+            "note": {"field": 'customer_message', "type":"str", "default":""},
         }
         for k,v in order_map.items():
-            o[k] = order[v]
+            o[k] = order[v['field']] if v['field'] in order.keys() else v['default']
 
-        notes.append('Online order id: %s' % order['cartid'])
+
+        notes.append('Online order id: %s' % order['id'])
         if o['note'] and len(o['note'])>0: notes.append('Customer message: %s' % o['note'])
 
         o['register_sale_products'] = []
@@ -281,10 +298,9 @@ class ApiClient(object):
                 'name':"Shipping", 
                 "base_price": shipping_cost,
                 "quantity":1,
-                "tax": 0,
-                "tax_total": 0
+                "total_tax": 0
                 }
-            try:order['entries'].append(entry)
+            try:order['products'].append(entry)
             except: pass
 
         if float(order['store_credit_amount'])>0:
@@ -293,10 +309,9 @@ class ApiClient(object):
                 'name': 'Online store credit', 
                 "base_price": -float(order['store_credit_amount']),
                 "quantity":1,
-                "tax": 0,
-                "tax_total":0        
+                "total_tax":0        
             }
-            order['entries'].append(entry)
+            order['products'].append(entry)
 
         # handle the entries
         entry_errors = []
@@ -305,12 +320,11 @@ class ApiClient(object):
         entry_map = {
             "quantity": "quantity",
             "price": 'base_price',
-            "tax": 'tax',
-            "total_tax" : "tax_total"
+            "total_tax" : "total_tax"
         }
 
         line_item_discount = 0.0
-        for entry in order['entries']:  
+        for entry in order['products']:  
 
             if not 'sku' in entry.keys():
                 if 'id' in entry.keys():
@@ -320,9 +334,16 @@ class ApiClient(object):
                 continue
 
             register_sale_product = {}
-            for k,v in entry_map.items():
-                register_sale_product[k] = entry[v]
-            register_sale_product['tax_id'] = taxobj.id
+
+            entry_total_ex_tax = float(entry['base_price'])
+            entry_tax = float(entry['total_tax'])
+            tax = self.get_tax(0 if entry_total_ex_tax==0 else entry_tax/entry_total_ex_tax)
+
+            register_sale_product['quantity'] = entry['quantity']
+            register_sale_product['price'] = entry_total_ex_tax
+            register_sale_product['tax_total'] = entry_tax # Not sure why Vend has both tax and tax_total??
+            register_sale_product['tax'] = entry_tax
+            register_sale_product['tax_id'] = tax.id
             
             entry_product = self.get_or_create_product(entry)
             
@@ -407,14 +428,15 @@ class ApiClient(object):
         o['register_sale_payments'] = []
 
         reg_sale_payment = {'retailer_payment_type_id':payment.id}
-        reg_sale_payment['payment_date'] = order['updated']
-        reg_sale_payment['amount'] = order['total']
+        reg_sale_payment['payment_date'] = order['date_modified']
+        reg_sale_payment['amount'] = order['total_inc_tax']
 
         o['register_sale_payments'].append(reg_sale_payment)
 
         # Notes
         o['note'] = "\r\n".join(notes)
-
+        # from pprint import pprint
+        # pprint(o)
         rs = self.Register_sales.create(o)
         return True        
         
