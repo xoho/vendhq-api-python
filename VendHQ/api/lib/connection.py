@@ -63,12 +63,12 @@ class Connection():
             qs = "?%s" % qs
             
         url = "%s%s%s" % (self.base_url, url, qs)
-        print url
         
         response = requests.get(url, data=None, headers=self.__headers)
         
         try:data = response.json()
         except Exception, e:
+            log.debug("GET: %s" % url)
             raise HTTPException("Could not decode json data from response %s" % response.text)
 
         status_code = response.status_code

@@ -7,11 +7,12 @@ from VendHQ.api.lib.connection import Connection
 from resources import ResourceAccessor
 
 log = logging.getLogger("VendHQ.api")
+pos_log = logging.getLogger("pos")
 log.setLevel(logging.DEBUG)
 
 class ApiClient(object):
     BASE_URL = '/api/'
-    
+    key_field = "sku"
     def __init__(self, host, username, pwd):
         auth = base64.b64encode("%s:%s" % (username,pwd))
         self._connection = Connection(host, self.BASE_URL, auth)
@@ -418,5 +419,10 @@ class ApiClient(object):
         rs = self.Register_sales.create(o)
         return True        
         
+    def initialize(self):
+        pass
+    
+    def finalize(self):
+        pass
 
     

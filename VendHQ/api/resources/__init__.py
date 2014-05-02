@@ -116,7 +116,7 @@ class ResourceAccessor(object):
 
                     if page_index < max_per_page:
                         requested_items = 0
-                break
+                
             # If the response was empty - we are done
             except EmptyResponseWarning:
                 requested_items = 0
