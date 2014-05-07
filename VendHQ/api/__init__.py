@@ -10,6 +10,7 @@ log = logging.getLogger("VendHQ.api")
 pos_log = logging.getLogger("pos")
 log.setLevel(logging.DEBUG)
 
+
 class ApiClient(object):
     BASE_URL = '/api/'
     key_field = "sku"
@@ -138,7 +139,9 @@ class ApiClient(object):
 
     def get_tax(self, tax_rate):
         tax = None
+        log.debug("Finding tax for rate %f" % tax_rate)
         for t in self.Taxes.enumerate():
+            log.debug("TAX %s %s %f" % (t.id, t.name, t.rate))
             if not tax: tax = t
             if tax_rate==tax.rate:
                 tax=t
@@ -249,24 +252,24 @@ class ApiClient(object):
         o['customer_id'] = customer['id']
         o['user_name']  = username
         o['status'] = sale_status if sale_status in ['SAVED','CLOSED','OPEN'] else "SAVED"
-        total = float(order['total'])
+        total = float(order['total_ex_tax'])
         tax = float(order['total_tax'])
         taxobj = self.get_tax(tax/total if total>0 else 0)
         o['tax_name'] = taxobj.name
 
         # Get mapped items
         order_map = {
-            "sale_date": "updated",
-            "total_price": "total",
+            "sale_date": "date_modified",
+            "total_price": "total_ex_tax",
             "total_tax": "total_tax",
-            "invoice_number": 'cartid',
-            "invoice_sequence": 'cartid',
+            #"invoice_number": 'id',
+            #"invoice_sequence": 'id',
             "note": 'customer_message',
         }
         for k,v in order_map.items():
             o[k] = order[v]
 
-        notes.append('Online order id: %s' % order['cartid'])
+        notes.append('Online order id: %s' % order['id'])
         if o['note'] and len(o['note'])>0: notes.append('Customer message: %s' % o['note'])
 
         o['register_sale_products'] = []
@@ -306,12 +309,12 @@ class ApiClient(object):
         entry_map = {
             "quantity": "quantity",
             "price": 'base_price',
-            "tax": 'tax',
-            "total_tax" : "tax_total"
+            "tax": 'total_tax',
+            "total_tax" : "total_inc_tax"
         }
 
         line_item_discount = 0.0
-        for entry in order['entries']:  
+        for entry in order['products']:  
 
             if not 'sku' in entry.keys():
                 if 'id' in entry.keys():
@@ -323,6 +326,7 @@ class ApiClient(object):
             register_sale_product = {}
             for k,v in entry_map.items():
                 register_sale_product[k] = entry[v]
+            log.debug("Applying tax %s %s" % (taxobj.id, taxobj.name))
             register_sale_product['tax_id'] = taxobj.id
             
             entry_product = self.get_or_create_product(entry)
@@ -408,15 +412,19 @@ class ApiClient(object):
         o['register_sale_payments'] = []
 
         reg_sale_payment = {'retailer_payment_type_id':payment.id}
-        reg_sale_payment['payment_date'] = order['updated']
-        reg_sale_payment['amount'] = order['total']
+        reg_sale_payment['payment_date'] = order['date_modified']
+        reg_sale_payment['amount'] = order['total_inc_tax']
 
         o['register_sale_payments'].append(reg_sale_payment)
 
         # Notes
         o['note'] = "\r\n".join(notes)
 
+        from pprint import pprint
+        pos_log.debug("Creating Order")
+        pprint(o)
         rs = self.Register_sales.create(o)
+        print rs
         return True        
         
     def initialize(self):
