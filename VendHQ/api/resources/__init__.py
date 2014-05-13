@@ -141,7 +141,8 @@ class ResourceAccessor(object):
     def create(self, data):
         try:
             result = self._connection.create(self._url, data)
-            return self._klass(self._connection, self._url, result, self._parent)
+            value = result.values()[0]
+            return self._klass(self._connection, self._url, value, self._parent)
         except:
             log.exception("Cannot create order")
             return None
