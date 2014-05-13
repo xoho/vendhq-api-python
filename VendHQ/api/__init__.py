@@ -7,6 +7,8 @@ from datetime import datetime
 from VendHQ.api.lib.connection import Connection
 from resources import ResourceAccessor
 
+from pprint import pprint, pformat
+
 log = logging.getLogger("VendHQ.api")
 pos_log = logging.getLogger("pos")
 log.setLevel(logging.DEBUG)
@@ -143,7 +145,7 @@ class ApiClient(object):
         return customer
 
     def get_tax(self, tax_rate):
-
+        pos_log.debug("Finding Tax rate for %f" % tax_rate)
         tax = None
         for t in self.__taxes:
             if not tax: tax = t
@@ -243,7 +245,7 @@ class ApiClient(object):
     def update_order(self, order=None, cart_name=None, data={}):    
         register_name = '' if not 'register_name' in data.keys() else data['register_name']
         username = 'admin' if not 'username' in data.keys() else data['username']
-        sale_status = "SAVED" if not 'sale_status' in data.keys() else data['sale_status']
+        sale_status = "CLOSED" if not 'sale_status' in data.keys() else data['sale_status']
         loyality_x = 0 if not 'loyality_x' in data.keys() else data['loyality_x']
 
         register_id = self.get_register_id(register_name)
@@ -269,14 +271,15 @@ class ApiClient(object):
         o['tax_pc'] = tax_pc
         taxobj = self.get_tax(tax_pc)
         o['tax_name'] = taxobj.name
+        pos_log.debug("Applying Tax %s %f" % (taxobj.name, taxobj.rate))
 
         # Get mapped items
         order_map = {
             "sale_date": {"field": "date_modified", "type":"datetime", "default":datetime.utcnow()},
             "total_price": {"field": "total_ex_tax", "type":"float", "default":0.0}, # total excluding tax
             "total_tax": {"field": "total_tax", "type":"float", "default":0.0},
-            "invoice_number": {"field": "id", "type":"int", "default":0},
-            "invoice_sequence": {"field": "id", "type":"int", "default":0},
+            #"invoice_number": {"field": "id", "type":"int", "default":0},
+            #"invoice_sequence": {"field": "id", "type":"int", "default":0},
             "note": {"field": 'customer_message', "type":"str", "default":""},
         }
         for k,v in order_map.items():
@@ -299,7 +302,9 @@ class ApiClient(object):
                 'name':"Shipping", 
                 "base_price": shipping_cost,
                 "quantity":1,
-                "total_tax": 0
+                "total_tax": 0,
+                "price_ex_tax": shipping_cost,
+                "price_tax": 0
                 }
             try:order['products'].append(entry)
             except: pass
@@ -321,12 +326,12 @@ class ApiClient(object):
         entry_map = {
             "quantity": "quantity",
             "price": 'base_price',
-            "total_tax" : "total_tax"
+            "tax" : "total_tax",
+            "total_tax": "total_inc_tax"
         }
 
         line_item_discount = 0.0
         for entry in order['products']:  
-
             if not 'sku' in entry.keys():
                 if 'id' in entry.keys():
                     notes.append("Could not find sku for order entry %s" % entry['id'])
@@ -336,8 +341,8 @@ class ApiClient(object):
 
             register_sale_product = {}
 
-            entry_total_ex_tax = float(entry['base_price'])
-            entry_tax = float(entry['total_tax'])
+            entry_total_ex_tax = float(entry['price_ex_tax'])
+            entry_tax = float(entry['price_tax'])
             tax = self.get_tax(0 if entry_total_ex_tax==0 else entry_tax/entry_total_ex_tax)
 
             register_sale_product['quantity'] = entry['quantity']
@@ -436,9 +441,10 @@ class ApiClient(object):
 
         # Notes
         o['note'] = "\r\n".join(notes)
-        # from pprint import pprint
-        # pprint(o)
+        
+        log.info("Creating order: %s" % pformat(o))
         rs = self.Register_sales.create(o)
+        log.info("Order %s created" % rs.id)
         return True        
         
     def initialize(self):
@@ -447,4 +453,4 @@ class ApiClient(object):
     def finalize(self):
         pass
 
-    
+
