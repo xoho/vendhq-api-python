@@ -140,7 +140,7 @@ class Connection():
         status_code = response.status_code
         
         log.debug("PUT %s status %d" % (url,status_code))
-        log.debug("OUTPUT: %s" % data)
+        log.debug("OUTPUT: %s" % pformat(data))
         
         result = {}
         if status_code == 200:
@@ -186,7 +186,7 @@ class Connection():
         status_code = response.status_code
 
         log.debug("POST %s status %d" % (url,status_code))
-        log.debug("OUTPUT: %s" % data)
+        log.debug("OUTPUT: %s" % pformat(data))
 
         result = {}
         if status_code == 200:
