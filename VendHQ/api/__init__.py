@@ -293,13 +293,16 @@ class ApiClient(object):
         try: shipping_cost = float(order['base_shipping_cost'])
         except: shipping_cost = 0
 
+        try: shipping_tax = shipping_cost-float(order['shipping_cost_inc_tax'])
+        except: shipping_tax=0
+
         if shipping_cost>0:
             entry = {
                 'sku':'SHIPPING', 
                 'name':"Shipping", 
                 "base_price": shipping_cost,
                 "quantity":1,
-                "total_tax": 0
+                "total_tax": shipping_tax
                 }
             try:order['products'].append(entry)
             except: pass
