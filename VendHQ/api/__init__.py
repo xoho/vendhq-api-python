@@ -295,7 +295,7 @@ class ApiClient(object):
         
         try: shipping_cost = float(order['base_shipping_cost'])
         except: shipping_cost = 0
-        try: shipping_tax = shipping_cost-float(order['shipping_cost_inc_tax'])
+        try: shipping_tax = float(order['shipping_cost_inc_tax'])-shipping_cost
         except: shipping_tax=0
 
 
