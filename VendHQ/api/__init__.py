@@ -264,8 +264,15 @@ class ApiClient(object):
         o['customer_id'] = customer['id']
         o['user_name']  = username
         o['status'] = sale_status if sale_status in ['SAVED','CLOSED','OPEN'] else "SAVED"
+
+        # Shipping costs
+        try: shipping_cost = float(order['base_shipping_cost'])
+        except: shipping_cost = 0
+        try: shipping_tax = float(order['shipping_cost_inc_tax'])-shipping_cost
+        except: shipping_tax=0
+
         total = float(order['total_ex_tax'])
-        tax = float(order['total_tax'])
+        tax = float(order['total_tax']) + shipping_tax
         tax_pc = 0 if total==0 else tax/total
 
         o['tax_pc'] = tax_pc
@@ -292,13 +299,6 @@ class ApiClient(object):
         o['register_sale_products'] = []
 
         # Update shipping costs if any as a new entry
-        
-        try: shipping_cost = float(order['base_shipping_cost'])
-        except: shipping_cost = 0
-        try: shipping_tax = float(order['shipping_cost_inc_tax'])-shipping_cost
-        except: shipping_tax=0
-
-
         if shipping_cost>0:
             entry = {
                 'sku':'SHIPPING', 
