@@ -133,6 +133,7 @@ class ApiClient(object):
             else:
                 cust_data[k] = ''
 
+        pos_log.info("Creating customer %s" % cust_data["last_name"])
         customer = self.Customers.create(cust_data)
         return customer
 
@@ -186,7 +187,7 @@ class ApiClient(object):
             data['handle'] = data['handle'] if 'handle' in data.keys() else data['sku']
             data['name'] = product_data['name']
             data['retail_price'] =  product_data['base_price']
-
+            pos_log.info("Creating product %s - %s" % (data["sku"], data["name"]))
             self.Products.create(data)
             product = self.get_product_by_sku(product_data['sku'])
 
@@ -292,7 +293,7 @@ class ApiClient(object):
         for k,v in order_map.items():
             o[k] = order[v['field']] if v['field'] in order.keys() else v['default']
 
-
+        o['sale_date'] = o["sale_date"].strftime("%Y-%m-%d %H:%M:%S")
         notes.append('Online order id: %s' % order['id'])
         if o['note'] and len(o['note'])>0: notes.append('Customer message: %s' % o['note'])
 
@@ -437,7 +438,7 @@ class ApiClient(object):
         o['register_sale_payments'] = []
 
         reg_sale_payment = {'retailer_payment_type_id':payment.id}
-        reg_sale_payment['payment_date'] = order['date_modified']
+        reg_sale_payment['payment_date'] = order['date_modified'].strftime("%Y-%m-%d %H:%M:%S")
         reg_sale_payment['amount'] = order['total_inc_tax']
 
         o['register_sale_payments'].append(reg_sale_payment)
