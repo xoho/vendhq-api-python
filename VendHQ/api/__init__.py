@@ -424,6 +424,7 @@ class ApiClient(object):
                 e['quantity'] = -1
                 e['tax'] = 0
                 e['total_tax'] = 0
+                e['total_inc_tax'] = -amount
                 discount_product = self.get_or_create_product(e)
                 register_sale_product = {}
                 for k,v in entry_map.items():
