@@ -318,6 +318,8 @@ class ApiClient(object):
                 'sku':'vend-discount', 
                 'name': 'Online store credit', 
                 "base_price": -float(order['store_credit_amount']),
+                "price_ex_tax": -float(order['store_credit_amount']),
+                "price_tax": -float(order['store_credit_amount']),
                 "quantity":1,
                 "total_tax":0        
             }
