@@ -46,8 +46,8 @@ logging.basicConfig(level=logging.DEBUG,
 log = logging.getLogger()
 
 
-def create_register_sale(register_name, username, order, sale_status="SAVED", loyality_x=50):
-    data = {'register_name':register_name,'username':username, 'sale_status':sale_status, 'loyality_x':loyality_x}
+def create_register_sale(register_name, username, order, sale_status="SAVED", loyality_x=50, outlet_name=None):
+    data = {'register_name':register_name,'username':username, 'sale_status':sale_status, 'loyality_x':loyality_x, 'outlet_name':outlet_name}
     api.update_order(order=order, cart_name="BigCommerce", data=data)
 
 
@@ -113,9 +113,25 @@ def run_test(testname, data={}):
 
         return True
 
+    if testname=="get_products_from_outlet":
+        print "Products from %s %s" % ("".join(data.keys()), "".join(data.values()))
+
+        for product in api.get_products(since="2014-07-01T00:00", data=data):
+            print product['sku'],product['quantity']
+
+        return True
+
     if testname=='get_register_id':
 
         print 'Register %s id is %s' % (data['name'], api.get_register_id(data['name']))
+        return True
+
+    if testname=="get_outlet_id":
+        print "Outlet id for outlet name %s is %s" % (data['name'], api.get_outlet_id(data['name']))
+        return True
+
+    if testname=="get_regsiter_id_by_outlet":
+        print 'Register "%s" in outlet "%s" id is [%s]' % (data['register_name'], data['outlet_name'], api.get_register_id(data['register_name'], api.get_outlet_id(data['outlet_name'])))
         return True
 
     if testname=='get_customer':
@@ -130,10 +146,16 @@ def run_test(testname, data={}):
 
 
     if testname=='create_register_sale':
-
         create_register_sale(register_name=data['register_name'],
                             username='admin', 
                             order=data['order'])
+        return True
+
+    if testname=='create_register_sale_at_outlet_name':
+        create_register_sale(register_name=data['register_name'],
+                            username='admin', 
+                            order=data['order'],
+                            outlet_name=data['outlet_name'])
         return True
 
 
@@ -226,11 +248,19 @@ if __name__ == "__main__":
     # tests.append((3,'get_register_id',{'name':'Main Register'}))
     # tests.append((4,'create_customer',customer))
     # tests.append((5,'get_customer',{'email':customer['email']}))
-    tests.append((6,'create_register_sale',{'register_name':'Main Register', 'order':order, 'username':'dev'}))
+    #tests.append((6,'create_register_sale',{'register_name':'Main Register', 'order':order, 'username':'dev'}))
     # tests.append((7,'get_register_sale','21ff4367-c951-11e3-a0f5-b8ca3a64f8f4'))
     # tests.append((8,'list_registers',None))
     # tests.append((9,'list_payment_types',None))
     # tests.append((10,'list_outlets',None))
+    tests.append((0,'get_outlet_id',{'name':"Uptown store"}))
+    tests.append((1,'get_regsiter_id_by_outlet',{'outlet_name':"Uptown store", "register_name":"Main Register"}))
+    tests.append((2,'get_regsiter_id_by_outlet',{'outlet_name':"Main Outlet", "register_name":"Main Register"}))
+    tests.append((3,'get_products_from_outlet',{'outlet_name':"Uptown store"}))
+    tests.append((4,'get_products_from_outlet',{'outlet_name':"Main Outlet"}))
+    tests.append((5,'create_register_sale_at_outlet_name',{'outlet_name':"Main Outlet", 'register_name':'Main Register', 'order':order, 'username':'dev'}))
+    tests.append((6,'create_register_sale_at_outlet_name',{'outlet_name':"Uptown store", 'register_name':'Main Register', 'order':order, 'username':'dev'}))
+
 
     status = []
     for test in sorted(tests, key=lambda x: x[0]):

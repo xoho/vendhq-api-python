@@ -100,6 +100,7 @@ class ResourceAccessor(object):
                 if self.__resource_name.lower() in data.keys():
                     if len(data[self.__resource_name.lower()])==0:
                         # No more data is returned
+                        print ' --- no more data returned'
                         break
 
                     for res in data[self.__resource_name.lower()]:

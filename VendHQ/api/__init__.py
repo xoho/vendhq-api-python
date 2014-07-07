@@ -42,20 +42,36 @@ class ApiClient(object):
         raise AttributeError
 
 
-    def get_product(self, id):
+    def get_product(self, id, data={}):
         prod = {}
+
+        if not isinstance(data, dict): # Force to dict
+            data = {}
+
+        outlet_id = None
+        if "outlet_name" in data.keys() or "outlet_id" in data.keys():
+            if not "outlet_name" in data.keys():
+                outlet_id = data['outlet_id']
+            else:
+                outlet_id = self.get_outlet_id(data['outlet_name'])
+            log.info("Restricting product search to outlet id: %s" % outlet_id)
+
         try:
             product = self.Products.get(id)
             prod["name"] = product.name
             prod["sku"] = getattr(product, self.key_field)
             prod["id"] = product.id
             quantity = 0
-            
+
             try:
                 for inv in product.inventory:
-                    quantity += int(float(inv["count"]))
-            except:
-                pass
+                    if outlet_id:
+                        if inv.outlet_id==outlet_id:
+                            quantity += int(float(inv['count']))
+                    else:
+                        quantity += int(float(inv['count']))
+            except Exception, e:
+                log.error("Exception reading product inventory (Exception: %s)" % e.message)
              
             prod["quantity"] = quantity
             return prod
@@ -65,40 +81,78 @@ class ApiClient(object):
         return None
             
         
-    def get_products(self, since):
+    def get_products(self, since, data={}):
         q = {}
         if since:
             q = {'since':since}
+
+        if not isinstance(data, dict): # Force to dict
+            data = {}
+
+        log.debug("Extra data: %s" % data)
+        
+        outlet_id = None
+        if "outlet_name" in data.keys() or "outlet_id" in data.keys():
+            if not "outlet_name" in data.keys():
+                outlet_id = data['outlet_id']
+            else:
+                outlet_id = self.get_outlet_id(data['outlet_name'])
+
+            log.info("Restricting product search to outlet id: %s" % outlet_id)
+
         
         for product in self.Products.enumerate(query=q):
+            quantity = 0
+
+            try:
+                for inv in product.inventory:
+                    if outlet_id:
+                        if inv.outlet_id==outlet_id:
+                            quantity += int(float(inv['count']))
+                    else:
+                        quantity += int(float(inv['count']))
+            except Exception, e:
+                log.error("Exception reading product inventory (Exception: %s)" % e.message)
+                continue
+
             prod = {}
             prod["sku"] = getattr(product, self.key_field)
             prod["id"] = product.id
             prod["name"] = product.name
-            quantity = 0
-            
-            try:
-                for inv in product.inventory:
-                    quantity += int(float(inv["count"]))
-            except:
-                pass 
-            
             prod["quantity"] = quantity
             yield prod
 
     ##
     # Helper functions
     ##
-    def get_register_id(self, name):
+    def get_register_id(self, name, outlet_id=None):
         reg = None
         for register in self.Registers.enumerate():
             if not reg: reg=register
 
-            if register.name==name:
-                reg = register
-                break
+            if register.name.lower()==name.strip().lower():
+                found = True
+                if outlet_id and not register.outlet_id==outlet_id:
+                    found = False
+
+                if found:
+                    reg = register
+                    break
         
         return reg.id if reg else None
+
+    def get_outlet_id(self, name):
+        outlet_id = None
+
+        if name:
+            for outlet in self.Outlets.enumerate():
+                if outlet.name.lower() == name.strip().lower():
+                    outlet_id = outlet.id
+                    break
+
+            pos_log.info("Found outlet id of %s for outlet name %s" % (outlet_id, name))
+
+        return outlet_id
 
     def get_customer_by_email(self, email):
         filters = self.Customers.filters()
@@ -194,62 +248,97 @@ class ApiClient(object):
         return product            
     
     
-    def get_updated_products(self, since):
+    def get_updated_products(self, since, data={}):
         
+        outlet_name = None if not 'outlet_name' in data.keys() else data['outlet_name']
+        outlet_id = self.get_outlet_id(outlet_name) if not 'outlet_id' in data.keys() else data['outlet_id'] # This is None if no outlet is passed.
+        if outlet_id: log.info("Using outlet id %s to sync products" % outlet_id)
+        register_name = '' if not 'register_name' in data.keys() else data['register_name']
+        register_id = self.get_register_id(register_name, outlet_id)
+        if register_id: log.info("Using register id %s to sync products" % register_id)
+
         prods = {}
         q = {"since": since}
         
         pos_log.info("Gathering products modified since %s" % since)
         
-        pos_log.info("Checking stock movements")
+        pos_log.info("Checking stock movements%s" % ("" if not outlet_id else " for outlet %s" % outlet_id))
         for st in self.Stock_Movements.enumerate(query=q):
-            print st.updated_at, st.id, st.type, st.status
-            if (st.type == "SUPPLIER" and st.status == "RECEIVED") or (st.type=="STOCKTAKE" and st.status=="STOCKTAKE_COMPLETE"):
-                for prod in st.products:
-                    id = prod.product_id
-                    if not prods.has_key(id):
-                        prods[id] = {"counted": False, "sold": False, "updated": False, "received": False}
-                    
-                    if st.type == "STOCKTAKE":
-                        prods[id]["counted"] = True
-                    
-                    if st.type == "SUPPLIER":
-                        prods[id]["received"] = True
+            incl = True
+
+            if outlet_id:
+                incl = outlet_id==st.outlet_id # if outlet id is given, include this stock movement if it matches the outlet id
+                if not incl:
+                    log.info("Skiping this stock movement because it does not exist in the outlet %s" % outlet_id)
+
+            if incl:
+                print st.updated_at, st.id, st.type, st.status
+                if (st.type == "SUPPLIER" and st.status == "RECEIVED") or (st.type=="STOCKTAKE" and st.status=="STOCKTAKE_COMPLETE"):
+                    for prod in st.products:
+
+                        id = prod.product_id
+                        if not prods.has_key(id):
+                            prods[id] = {"counted": False, "sold": False, "updated": False, "received": False}
+                        
+                        if st.type == "STOCKTAKE":
+                            prods[id]["counted"] = True
+                        
+                        if st.type == "SUPPLIER":
+                            prods[id]["received"] = True
         
         pos_log.info("Checking products")
         for product in self.Products.enumerate(query=q):
+            # No way to tell if a product in a particular outlet has changed -- just return all of them
             id = product.id
             if not prods.has_key(id):
                 prods[id] = {"counted": False, "sold": False, "updated": False, "received": False}
             prods[id]["updated"] = True
     
-        pos_log.info("Checking register sales")
+        pos_log.info("Checking register sales%s" % ("" if not register_id else " for register %s" % register_id))
         for sales in self.Register_Sales.enumerate(query=q):
             for prod in sales.register_sale_products:
-                id = prod.product_id
-                if not prods.has_key(id):
-                    prods[id] = {"counted": False, "sold": False, "updated": False, "received": False}
-                prods[id]["sold"] = True
+                incl = True
+                if register_id:
+                    incl = register_id==prod.register_id  # if register id is provided and doesn't match this register sale then don't include
 
-        pos_log.info("*** Checking for VOIDED Sales")
+                if incl:
+                    id = prod.product_id
+                    if not prods.has_key(id):
+                        prods[id] = {"counted": False, "sold": False, "updated": False, "received": False}
+                    prods[id]["sold"] = True
+
+        pos_log.info("*** Checking for VOIDED Sales%s" % ("" if not register_id else " for register %s" % register_id))
         q["status"] = "VOIDED"
         for sales in self.Register_Sales.enumerate(query=q):
             for prod in sales.register_sale_products:
-                id = prod.product_id
-                if not prods.has_key(id):
-                    prods[id] = {"counted": False, "sold": False, "updated": False, "received": False}
-                prods[id]["sold"] = True
+                incl = True
+                if register_id:
+                    incl = register_id==prod.register_id  # if register id is provided and doesn't match this register sale then don't include
+
+                if incl:
+                    id = prod.product_id
+                    if not prods.has_key(id):
+                        prods[id] = {"counted": False, "sold": False, "updated": False, "received": False}
+                    prods[id]["sold"] = True
 
         return prods     
 
 
     def update_order(self, order=None, cart_name=None, data={}):    
+
+        log.debug("Extra data: %s" % data)
+
         register_name = '' if not 'register_name' in data.keys() else data['register_name']
+        outlet_name = None if not 'outlet_name' in data.keys() else data['outlet_name']
+        outlet_id = self.get_outlet_id(outlet_name) if not 'outlet_id' in data.keys() else data['outlet_id'] # This is None if no outlet is passed.
+
+        if outlet_id: log.info("Using outlet id %s to update order" % outlet_id)
+
         username = 'admin' if not 'username' in data.keys() else data['username']
         sale_status = "CLOSED" if not 'sale_status' in data.keys() else data['sale_status']
         loyality_x = 0 if not 'loyality_x' in data.keys() else data['loyality_x']
 
-        register_id = self.get_register_id(register_name)
+        register_id = self.get_register_id(register_name, outlet_id)
         customer = self.get_or_create_customer(order['billing_address'])
 
         for k in ['total_ex_tax','total_tax','id','date_modified', 'total_inc_tax', 'products']:
@@ -293,7 +382,6 @@ class ApiClient(object):
         for k,v in order_map.items():
             o[k] = order[v['field']] if v['field'] in order.keys() else v['default']
 
-        o['sale_date'] = o["sale_date"].strftime("%Y-%m-%d %H:%M:%S")
         notes.append('Online order id: %s' % order['id'])
         if o['note'] and len(o['note'])>0: notes.append('Customer message: %s' % o['note'])
 
@@ -441,7 +529,7 @@ class ApiClient(object):
         o['register_sale_payments'] = []
 
         reg_sale_payment = {'retailer_payment_type_id':payment.id}
-        reg_sale_payment['payment_date'] = order['date_modified'].strftime("%Y-%m-%d %H:%M:%S")
+        reg_sale_payment['payment_date'] = o['sale_date']
         reg_sale_payment['amount'] = order['total_inc_tax']
 
         o['register_sale_payments'].append(reg_sale_payment)
