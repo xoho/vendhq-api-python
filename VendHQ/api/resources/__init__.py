@@ -100,6 +100,7 @@ class ResourceAccessor(object):
                 if self.__resource_name.lower() in data.keys():
                     if len(data[self.__resource_name.lower()])==0:
                         # No more data is returned
+                        log.info("no more data %s" % pformat(data))
                         print ' --- no more data returned'
                         break
 

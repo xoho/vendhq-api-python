@@ -131,7 +131,7 @@ class Connection():
         
         put_headers = {"Content-Type": "application/json"}
         put_headers.update(self.__headers)
-        response = requests.post(url, data=json.dumps(updates), headers=put_headers)
+        response = requests.put(url, data=json.dumps(updates), headers=put_headers)
         try:data = response.json()
         except Exception, e:
             raise HTTPException("Could not decode json data from response %s" % response.text)
